@@ -55,6 +55,9 @@ sys_sbrk(void)
 uint64
 sys_sleep(void)
 {
+  /*lab traps 👇*/
+  backtrace();
+  /*lab traps 👆*/
   int n;
   uint ticks0;
 
@@ -94,4 +97,39 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64
+sys_sigalarm(void)
+{
+  // 在系统调用时，进行初始化
+  int ticks;
+  uint64 handler;
+  struct proc *p = myproc();
+  // 获取参数
+  if (argint(0,&ticks) < 0)
+    return -1;
+  if (argaddr(1,&handler) < 0)
+    return -1;
+  acquire(&p->lock);
+  p->ticks = ticks;
+  p->handler = handler;
+  p->cur_ticks = 0;
+  release(&p->lock);
+  return 0;
+}
+
+uint64
+sys_sigreturn(void)
+{
+  struct proc *p = myproc();
+  acquire(&p->lock);
+  if (p->save_trapframe)
+  {
+    memmove(p->trapframe, p->save_trapframe, PGSIZE);
+    kfree(p->save_trapframe);
+    p->save_trapframe = 0;
+  }
+  release(&p->lock);
+  return 0;
 }

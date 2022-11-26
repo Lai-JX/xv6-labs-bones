@@ -132,3 +132,18 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+/*lab traps 👇
+* 打印栈帧
+*/
+void
+backtrace(void)
+{
+  printf("backtrace:\n");
+  // 获取frame pointer
+  uint64 fp = r_fp();
+  uint64 max = PGROUNDUP(fp);
+  for (; fp < max; fp = *((uint64 *)(fp-16))) /**((uint64 *)(fp-16))表示先强转为地址，再获取该地址处的值*/
+  {
+    printf("%p\n", *((uint64 *)(fp - 8)));
+  }
+}

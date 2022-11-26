@@ -57,7 +57,7 @@ usertrap(void)
       exit(-1);
 
     // sepc points to the ecall instruction,
-    // but we want to return to the next instruction.
+    // but we want to return to the next instruction.(返回地址)
     p->trapframe->epc += 4;
 
     // an interrupt will change sstatus &c registers,
@@ -77,8 +77,19 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
+  if(which_dev == 2){
+    if (p->ticks == 0)  // 如果没有设置ticks则和原来一样
+      yield();
+    p->cur_ticks++;
+    if (p->cur_ticks == p->ticks && p->save_trapframe == 0)
+    {
+      p->cur_ticks = 0;
+      p->save_trapframe = (struct trapframe *)kalloc();
+      memmove(p->save_trapframe, p->trapframe, PGSIZE);
+      p->trapframe->epc = p->handler;
+    }
+  }
+    
 
   usertrapret();
 }

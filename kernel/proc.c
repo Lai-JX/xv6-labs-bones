@@ -106,7 +106,12 @@ allocproc(void)
 
 found:
   p->pid = allocpid();
-
+/*trap: alarm 👇*/
+  p->cur_ticks = 0;
+  p->ticks = 0;   // ticks和handler也要初始化为0，表示不周期性参数alarm
+  p->handler = 0;
+  p->save_trapframe = 0;
+  /*trap: alarm 👆*/
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     release(&p->lock);
