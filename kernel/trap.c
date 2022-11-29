@@ -68,10 +68,33 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
+    // lazy allocation -->deal with page fault
+    // whether a fault is page fault
+    if (r_scause() == 13 || r_scause() == 15)
+    {
+      // read virtual address
+      uint64 v_address = r_stval();
+      if(v_address < p->sz){
+        char *mem = kalloc();
+        if (mem)
+        {
+          memset(mem, 0, PGSIZE);
+          if(mappages(p->pagetable, PGROUNDDOWN(v_address), PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+            kfree(mem);
+            uvmunmap(p->pagetable, PGROUNDDOWN(v_address), 1, 1); // 第一个1表示解除1页的映射，第2个1表示清除对应空间
+          }else{
+            goto allo_finish;
+          }
+        }
+        
+        
+      }
+    }
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
+allo_finish:
 
   if(p->killed)
     exit(-1);
