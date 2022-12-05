@@ -268,6 +268,7 @@ fork(void)
   }
 
   // Copy user memory from parent to child.
+  // 使用惰性分配，这里就先不分配了，等到用到了再分配
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
@@ -458,7 +459,7 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-  
+
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.

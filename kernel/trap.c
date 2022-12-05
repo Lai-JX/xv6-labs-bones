@@ -74,7 +74,8 @@ usertrap(void)
     {
       // read virtual address
       uint64 v_address = r_stval();
-      if(v_address < p->sz){
+      // 既不能溢出，也不能访问用户栈的非法空间
+      if(v_address < p->sz && v_address >= p->trapframe->sp){
         char *mem = kalloc();
         if (mem)
         {
@@ -83,18 +84,16 @@ usertrap(void)
             kfree(mem);
             uvmunmap(p->pagetable, PGROUNDDOWN(v_address), 1, 1); // 第一个1表示解除1页的映射，第2个1表示清除对应空间
           }else{
-            goto allo_finish;
+            goto alloc_success;
           }
         }
-        
-        
       }
     }
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
-allo_finish:
+alloc_success:
 
   if(p->killed)
     exit(-1);

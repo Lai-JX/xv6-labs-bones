@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -96,15 +98,34 @@ walkaddr(pagetable_t pagetable, uint64 va)
 {
   pte_t *pte;
   uint64 pa;
+  struct proc *p = myproc();
 
   if(va >= MAXVA)
     return 0;
 
   pte = walk(pagetable, va, 0);
-  if(pte == 0)
+  // 映射未建立，有效位为0，则分配空间并建立映射（惰性分配）
+  if(pte == 0 || (*pte & PTE_V) == 0){
+    // 既不能溢出，也不能访问用户栈的非法空间
+    if(va < p->sz && va >= p->trapframe->sp){
+      char *mem = kalloc();
+      if (mem)
+      {
+        memset(mem, 0, PGSIZE);
+        if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+          kfree(mem);
+          uvmunmap(p->pagetable, PGROUNDDOWN(va), 1, 1); // 第一个1表示解除1页的映射，第2个1表示清除对应空间
+        }else{
+          pte = walk(pagetable, va, 0);
+          goto alloc_success;
+        }
+      }
+    }
+    // 分配失败，返回0
     return 0;
-  if((*pte & PTE_V) == 0)
-    return 0;
+  }
+  
+alloc_success:
   if((*pte & PTE_U) == 0)
     return 0;
   pa = PTE2PA(*pte);
@@ -315,9 +336,9 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
-      panic("uvmcopy: pte should exist");
+      continue; // panic("uvmcopy: pte should exist");  // 惰性分配
     if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+      continue; // panic("uvmcopy: page not present");  // 惰性分配
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)

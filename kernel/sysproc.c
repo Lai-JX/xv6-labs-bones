@@ -43,13 +43,18 @@ sys_sbrk(void)
 {
   int addr;
   int n;
-
+  struct proc *p = myproc();
   if(argint(0, &n) < 0)
     return -1;
-  addr = myproc()->sz;
+  addr = p->sz;
   // if(growproc(n) < 0)
   //   return -1;
-  myproc()->sz += n;    // 不分配内存，只声明大小（lab lazy）
+  if (n > 0){
+    p->sz += n;    // 不分配内存，只声明大小（lab lazy）
+  }else if(n < 0){
+    p->sz = uvmdealloc(p->pagetable, addr, addr + n);
+  }
+
   return addr;
 }
 
