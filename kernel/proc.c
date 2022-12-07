@@ -136,8 +136,13 @@ found:
 static void
 freeproc(struct proc *p)
 {
-  if(p->trapframe)
+  if(p->trapframe){
+    // if (((uint64)(p->trapframe)-KERNBASE)/PGSIZE==32575)
+    //   {
+    //     printf("freeproc\n");
+    //   }
     kfree((void*)p->trapframe);
+  }
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
@@ -458,7 +463,6 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-  
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.

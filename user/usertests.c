@@ -2133,7 +2133,9 @@ kernmem(char *s)
       printf("%s: fork failed\n", s);
       exit(1);
     }
-    if(pid == 0){
+    if (pid == 0)
+    {
+      printf("kermem\n");
       printf("%s: oops could read %x = %x\n", s, a, *a);
       exit(1);
     }

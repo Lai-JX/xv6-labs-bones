@@ -6,6 +6,8 @@
 #include "defs.h"
 #include "fs.h"
 
+
+
 /*
  * the kernel's page table.
  */
@@ -45,6 +47,7 @@ kvminit()
   // map the trampoline for trap entry/exit to
   // the highest virtual address in the kernel.
   kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+  
 }
 
 // Switch h/w page table register to the kernel's page table,
@@ -189,6 +192,10 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     if(do_free){
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
+      // if (((uint64)(pa)-KERNBASE)/PGSIZE==32575)
+      // {
+      //   printf("uvmunmap\n");
+      // }
     }
     *pte = 0;
   }
@@ -244,6 +251,10 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     memset(mem, 0, PGSIZE);
     if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
       kfree(mem);
+      if (((uint64)(mem)-KERNBASE)/PGSIZE==32575)
+      {
+        printf("uvmalloc\n");
+      }
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
@@ -287,6 +298,10 @@ freewalk(pagetable_t pagetable)
     }
   }
   kfree((void*)pagetable);
+  if (((uint64)(pagetable)-KERNBASE)/PGSIZE==32575)
+      {
+        printf("freewalk\n");
+      }
 }
 
 // Free user memory pages,
@@ -311,28 +326,47 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
+  // char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
+
     pa = PTE2PA(*pte);
+    // 将父进程页表项的写标志位置0,cow标志位置一
+    *pte = (*pte & ~(PTE_W)) | PTE_COW;
+
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    // pa = PTE2PA(*pte);
+    // flags = PTE_FLAGS(*pte);
+    // flags = (flags | PTE_COW) & (~PTE_W);
+    // *pte = PA2PTE(pa) | flags;
+
+    // cow: 新表中表项直接映射到父进程的物理空间
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
       goto err;
     }
+    // 引用计数加1
+    update_refcount(pa, 1);
+    
+    // if((mem = kalloc()) == 0)
+    //   goto err;
+    // memmove(mem, (char*)pa, PGSIZE);
+    // if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+    //   kfree(mem);
+    //   goto err;
+    // }
+    
+    
   }
   return 0;
 
  err:
-  uvmunmap(new, 0, i / PGSIZE, 1);
-  return -1;
+   printf("err!!!\n");
+   uvmunmap(new, 0, i / PGSIZE, 1);
+   return -1;
 }
 
 // mark a PTE invalid for user access.
@@ -361,6 +395,10 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
+    // copy on write
+    if (cow(pagetable, va0, &pa0) == -1)  // 出错，即页表项为0
+      return -1;
+
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
@@ -439,4 +477,64 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+// copy on write
+// ljx
+// return 1 表示该页面不是cow，不需要分配空间；
+// return 0 表示该页面是cow，分配成功；
+// return -1 表示该页面是cow，分配失败；
+int cow(pagetable_t pagetable, uint64 va, uint64 *newpa)
+{
+  // printf("cow\n");
+  pte_t *pte = walk(pagetable, va, 0);
+  if (*pte==0)
+    return -1;
+  // 判断是否为copy on write
+  if (*pte & PTE_COW)
+  {
+    // 找到物理地址
+    uint64 pa = PTE2PA(*pte); // walkaddr(pagetable, va);
+    // uint64 pa2 = walkaddr(pagetable, va); // walkaddr(pagetable, va);
+    // printf("%p,%p\n", pa, pa2);
+    // if (((uint64)pa-KERNBASE)/PGSIZE==32575)
+    //   {
+    //     if (*newpa)
+    //     {
+    //       printf("copyout\n");
+    //     }else
+    //       printf("usertrap\n");
+    //   }
+
+    // if (get_refcount(pa) == 1)
+    // {
+    //   *pte = (*pte & ~(PTE_COW)) | PTE_W;
+    //   *newpa = pa;
+    //   return 0;
+    // }
+
+    // 分配一个页
+    char *mem = kalloc();
+    if (mem)
+    {
+      // 复制
+      memmove(mem, (char *)pa, PGSIZE);
+
+      // 修改pte
+      *pte = ((*pte & ~(PTE_COW)) | PTE_W);
+      uint flags = PTE_FLAGS(*pte);
+      *pte = PA2PTE(mem) | flags;
+
+      // 当前进程不再指向pa对应的空间
+      kfree((void *)pa);
+
+      // 新分配的独立页地址
+      *newpa = (uint64)mem;
+
+      return 0;
+    }else{
+      return -1;
+    }
+  }
+  return 1;
 }
