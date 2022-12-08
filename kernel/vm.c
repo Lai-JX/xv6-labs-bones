@@ -339,18 +339,15 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     *pte = (*pte & ~(PTE_W)) | PTE_COW;
 
     flags = PTE_FLAGS(*pte);
-    // pa = PTE2PA(*pte);
-    // flags = PTE_FLAGS(*pte);
-    // flags = (flags | PTE_COW) & (~PTE_W);
-    // *pte = PA2PTE(pa) | flags;
+
 
     // cow: 新表中表项直接映射到父进程的物理空间
     if(mappages(new, i, PGSIZE, pa, flags) != 0){
       goto err;
     }
     // 引用计数加1
-    update_refcount(pa, 1);
-    
+    update_refcount(pa,1);
+
     // if((mem = kalloc()) == 0)
     //   goto err;
     // memmove(mem, (char*)pa, PGSIZE);
@@ -495,23 +492,6 @@ int cow(pagetable_t pagetable, uint64 va, uint64 *newpa)
   {
     // 找到物理地址
     uint64 pa = PTE2PA(*pte); // walkaddr(pagetable, va);
-    // uint64 pa2 = walkaddr(pagetable, va); // walkaddr(pagetable, va);
-    // printf("%p,%p\n", pa, pa2);
-    // if (((uint64)pa-KERNBASE)/PGSIZE==32575)
-    //   {
-    //     if (*newpa)
-    //     {
-    //       printf("copyout\n");
-    //     }else
-    //       printf("usertrap\n");
-    //   }
-
-    // if (get_refcount(pa) == 1)
-    // {
-    //   *pte = (*pte & ~(PTE_COW)) | PTE_W;
-    //   *newpa = pa;
-    //   return 0;
-    // }
 
     // 分配一个页
     char *mem = kalloc();

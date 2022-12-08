@@ -65,6 +65,7 @@ void            kfree(void *);
 void            kinit(void);
 int             update_refcount(uint64, int);
 int             get_refcount(uint64 );
+int             reset_refcount(uint64 );
 
 // log.c
 void            initlog(int, struct superblock*);

@@ -40,9 +40,12 @@ void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
-  for (int i = 0; i < PAGES_REFCOUNT_LENTH; i++)
+  for (int i = 0; i < PAGES_REFCOUNT_LENTH; i++){
     initlock(&pages_refcount[i].lock, "ref_count");
-  
+    // 初始化时pages_refcount应置为0，但kfree这里会减一，所以我们提前置1
+    pages_refcount[i].cnt = 1;
+  }
+
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -53,11 +56,6 @@ freerange(void *pa_start, void *pa_end)
   p = (char*)PGROUNDUP((uint64)pa_start);
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
   {
-    // 初始化时pages_refcount应置为0，但kfree这里会减一，所以我们提前置1
-    pages_refcount[IDX(p)].cnt = 1;
-    // if (IDX(p)==32575)
-    //   printf("32575 freerange:%d\n", kmem.pages_refcount[IDX(p)]);
-
     kfree(p);
   }
 }
@@ -82,9 +80,6 @@ kfree(void *pa)
     update_refcount((uint64)pa, -1);
     if (get_refcount((uint64)pa) < 0)
       panic("kfree:pages_refcount");
-
-    // if (IDX(pa)==32575)
-    //   printf("32575 after kfree:%d\n", kmem.pages_refcount[IDX(pa)]);
 
     if (get_refcount((uint64)pa))
     {
@@ -123,29 +118,28 @@ kalloc(void)
 
   if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
-    pages_refcount[IDX(r)].cnt = 1;
+    // if ((uint64)r==0x87f44000){
+    //   printf("\nkalloc 0x87f4400\n");
+    // }
+    reset_refcount((uint64)r);
   }
 
   return (void*)r;
 }
-// 为了方便其它文件的函数更新pages_refcount, 声明了这个函数
-// pa为被引用页面的物理地址，val为要增加的值（即引用次数）
+// 为了方便更新pages_refcount, 声明了这个函数
+// pa为被引用页面的物理地址，val为要增加的值（即引用次数,可为负数）
 int update_refcount(uint64 pa, int val)
 {
   if (pa < KERNBASE || pa >= PHYSTOP)
     panic("update_refcount\n");
+
   acquire(&pages_refcount[IDX(pa)].lock);
-
-  // if (IDX(pa)==32575)
-  //     printf("32575 before update:%d\n", kmem.pages_refcount[IDX(pa)]);
-
+  
   pages_refcount[IDX(pa)].cnt += val;
-
-  // if (IDX(pa)==32575)
-  //     printf("32575 after update:%d\n", kmem.pages_refcount[IDX(pa)]);
 
   if (pages_refcount[IDX(pa)].cnt < 0)
     panic("update_refcount:invalid val!(refcount less than 0)\n");
+  
   release(&pages_refcount[IDX(pa)].lock);
   return 0;
 }
@@ -154,19 +148,21 @@ int get_refcount(uint64 pa)
   int val = 0;
   if (pa < KERNBASE || pa >= PHYSTOP)
     panic("get_refcount\n");
+
   acquire(&pages_refcount[IDX(pa)].lock);
-
-  // // if (IDX(pa)==32575)
-  // //     printf("32575 before update:%d\n", kmem.pages_refcount[IDX(pa)]);
-
-  // // kmem.pages_refcount[IDX(pa)] += val;
-
-  // // if (IDX(pa)==32575)
-  // //     printf("32575 after update:%d\n", kmem.pages_refcount[IDX(pa)]);
-
-  // // if (kmem.pages_refcount[IDX(pa)] <= 0)
-  // //   panic("update_refcount:invalid val!(refcount not larger than 0)\n");
   val = pages_refcount[IDX(pa)].cnt;
   release(&pages_refcount[IDX(pa)].lock);
-  return val; 
+
+  return val;
+}
+int reset_refcount(uint64 pa)
+{
+  if (pa < KERNBASE || pa >= PHYSTOP)
+    panic("reset_refcount\n");
+
+  acquire(&pages_refcount[IDX(pa)].lock);
+  pages_refcount[IDX(pa)].cnt = 1;
+
+  release(&pages_refcount[IDX(pa)].lock);
+  return 0;
 }
