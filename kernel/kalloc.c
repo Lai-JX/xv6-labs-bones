@@ -68,20 +68,16 @@ void
 kfree(void *pa)
 {
   struct run *r;
-  // printf("kfree:%d\n", kmem.pages_refcount[IDX(pa)]);
-  // printf("kfree1:%d\n", IDX(pa));
   if (((uint64)pa % PGSIZE) != 0 || (char *)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
   // 最后一次引用时才free
   if ((uint64)pa >= KERNBASE)
   {
-    // if (IDX(pa)==32575)
-    //   printf("32575 before kfree:%d\n", kmem.pages_refcount[IDX(pa)]);
-    update_refcount((uint64)pa, -1);
-    if (get_refcount((uint64)pa) < 0)
+    int cnt = update_refcount((uint64)pa, -1);
+    if (cnt < 0)
       panic("kfree:pages_refcount");
 
-    if (get_refcount((uint64)pa))
+    if (cnt)
     {
       return;
     }
@@ -111,23 +107,18 @@ kalloc(void)
   if(r)
   {
     kmem.freelist = r->next;
-    // if (IDX(r)==32575)
-    //   printf("32575 kalloc:%d\n", kmem.pages_refcount[IDX(r)]);
   }
   release(&kmem.lock);
 
   if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
-    // if ((uint64)r==0x87f44000){
-    //   printf("\nkalloc 0x87f4400\n");
-    // }
     reset_refcount((uint64)r);
   }
 
   return (void*)r;
 }
 // 为了方便更新pages_refcount, 声明了这个函数
-// pa为被引用页面的物理地址，val为要增加的值（即引用次数,可为负数）
+// pa为被引用页面的物理地址，val为要增加的值（即引用次数,可为负数）,返回更新后的cnt
 int update_refcount(uint64 pa, int val)
 {
   if (pa < KERNBASE || pa >= PHYSTOP)
@@ -139,22 +130,11 @@ int update_refcount(uint64 pa, int val)
 
   if (pages_refcount[IDX(pa)].cnt < 0)
     panic("update_refcount:invalid val!(refcount less than 0)\n");
-  
+  int ret = pages_refcount[IDX(pa)].cnt;
   release(&pages_refcount[IDX(pa)].lock);
-  return 0;
+  return ret;
 }
-int get_refcount(uint64 pa)
-{
-  int val = 0;
-  if (pa < KERNBASE || pa >= PHYSTOP)
-    panic("get_refcount\n");
 
-  acquire(&pages_refcount[IDX(pa)].lock);
-  val = pages_refcount[IDX(pa)].cnt;
-  release(&pages_refcount[IDX(pa)].lock);
-
-  return val;
-}
 int reset_refcount(uint64 pa)
 {
   if (pa < KERNBASE || pa >= PHYSTOP)
