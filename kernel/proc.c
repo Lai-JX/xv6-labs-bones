@@ -476,8 +476,9 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
-        swtch(&c->context, &p->context);
+        swtch(&c->context, &p->context);  // 退出调度器线程到p线程
 
+        // p线程占用时间片结束
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
@@ -514,7 +515,7 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->context);
+  swtch(&p->context, &mycpu()->context);  // 进入调度器线程
   mycpu()->intena = intena;
 }
 
@@ -524,7 +525,7 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-  p->state = RUNNABLE;
+  p->state = RUNNABLE;  // 从运行态转为就绪态
   sched();
   release(&p->lock);
 }

@@ -7,8 +7,10 @@
 
 #define NBUCKET 5
 #define NKEYS 100000
+pthread_mutex_t lock[5];
 
-struct entry {
+struct entry
+{
   int key;
   int value;
   struct entry *next;
@@ -38,11 +40,13 @@ insert(int key, int value, struct entry **p, struct entry *n)
 static 
 void put(int key, int value)
 {
-  int i = key % NBUCKET;
+  int i = key % NBUCKET;  // 散列值
 
   // is the key already present?
   struct entry *e = 0;
-  for (e = table[i]; e != 0; e = e->next) {
+  pthread_mutex_lock(&lock[i]);
+  for (e = table[i]; e != 0; e = e->next)
+  {
     if (e->key == key)
       break;
   }
@@ -53,6 +57,7 @@ void put(int key, int value)
     // the new is new.
     insert(key, value, &table[i], table[i]);
   }
+  pthread_mutex_unlock(&lock[i]);
 }
 
 static struct entry*
@@ -62,10 +67,11 @@ get(int key)
 
 
   struct entry *e = 0;
+  pthread_mutex_lock(&lock[i]);
   for (e = table[i]; e != 0; e = e->next) {
     if (e->key == key) break;
   }
-
+  pthread_mutex_unlock(&lock[i]);
   return e;
 }
 
@@ -109,21 +115,29 @@ main(int argc, char *argv[])
   }
   nthread = atoi(argv[1]);
   tha = malloc(sizeof(pthread_t) * nthread);
-  srandom(0);
-  assert(NKEYS % nthread == 0);
+  srandom(0);   // 随机种子
+  assert(NKEYS % nthread == 0);     // 进程数和哈希值个数一样多就报错
   for (int i = 0; i < NKEYS; i++) {
     keys[i] = random();
   }
 
+  // 初始化各个哈希桶的锁
+  for (int i = 0; i < NBUCKET; i++)
+  {
+    pthread_mutex_init(&lock[i], NULL);
+  }
+
   //
   // first the puts
+  // pthread_create()创建线程，第一个参数为新线程id，第二个参数为要设置的线程属性，
+  // 第三个参数为 创建线程后执行的程序，第四个参数为传给程序的参数
   //
   t0 = now();
   for(int i = 0; i < nthread; i++) {
     assert(pthread_create(&tha[i], NULL, put_thread, (void *) (long) i) == 0);
   }
   for(int i = 0; i < nthread; i++) {
-    assert(pthread_join(tha[i], &value) == 0);
+    assert(pthread_join(tha[i], &value) == 0);  // 阻塞线程直到tha[i]线程终止
   }
   t1 = now();
 

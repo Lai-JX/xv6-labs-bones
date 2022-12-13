@@ -3,6 +3,8 @@
 #   void swtch(struct context *old, struct context *new);
 # 
 # Save current registers in old. Load from new.	
+# a0指的是old，这里sd ra,0(a0)保存的地址是调用swtch的程序中的下一地址，即恢复old上下文后，直接回到调用swtch的程序，而不回到swtch
+# a1指的是new
 
 
 .globl swtch

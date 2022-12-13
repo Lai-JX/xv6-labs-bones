@@ -11,7 +11,7 @@ struct barrier {
   pthread_mutex_t barrier_mutex;
   pthread_cond_t barrier_cond;
   int nthread;      // Number of threads that have reached this round of the barrier
-  int round;     // Barrier round
+  int round;     // Barrier round  所有进程到达barrier时，增加round
 } bstate;
 
 static void
@@ -30,7 +30,17 @@ barrier()
   // Block until all threads have called barrier() and
   // then increment bstate.round.
   //
-  
+  assert(pthread_mutex_lock(&bstate.barrier_mutex) == 0);
+  if (++bstate.nthread == nthread) // 本轮所有线程均达到barrier
+  {
+    assert(pthread_cond_broadcast(&bstate.barrier_cond) == 0); // 唤醒所有线程
+    bstate.round++;
+    bstate.nthread = 0;
+  }
+  else
+    assert(pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex) == 0);
+
+  assert(pthread_mutex_unlock(&bstate.barrier_mutex) == 0);
 }
 
 static void *

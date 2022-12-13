@@ -1,0 +1,1 @@
+Because more than one thread push the value into one hash bucket.
