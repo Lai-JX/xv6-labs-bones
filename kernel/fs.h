@@ -2,7 +2,7 @@
 // Both the kernel and user programs use this header file.
 
 
-#define ROOTINO  1   // root i-number
+#define ROOTINO  1   // root i-number 根目录编号为1，标号为0的inode没使用？，用于指示目录项为空？
 #define BSIZE 1024  // block size
 
 // Disk layout:
@@ -24,18 +24,19 @@ struct superblock {
 
 #define FSMAGIC 0x10203040
 
-#define NDIRECT 12
+#define NDIRECT 11
 #define NINDIRECT (BSIZE / sizeof(uint))
-#define MAXFILE (NDIRECT + NINDIRECT)
+#define NDOUBLE_INDIRECT (NINDIRECT*NINDIRECT)
+#define MAXFILE (NDIRECT + NINDIRECT + NDOUBLE_INDIRECT)
 
 // On-disk inode structure
 struct dinode {
-  short type;           // File type
-  short major;          // Major device number (T_DEVICE only)
-  short minor;          // Minor device number (T_DEVICE only)
+  short type;           // File type    type为0表示磁盘inode空闲
+  short major;          // Major device number (T_DEVICE only)  主设备号
+  short minor;          // Minor device number (T_DEVICE only)  辅助设备号
   short nlink;          // Number of links to inode in file system
   uint size;            // Size of file (bytes)
-  uint addrs[NDIRECT+1];   // Data block addresses
+  uint addrs[NDIRECT+2];   // Data block addresses 直接索引+一级索引+二级索引
 };
 
 // Inodes per block.
@@ -54,7 +55,7 @@ struct dinode {
 #define DIRSIZ 14
 
 struct dirent {
-  ushort inum;
+  ushort inum;        // 此字段为零，表示条目是空的。
   char name[DIRSIZ];
 };
 

@@ -41,6 +41,7 @@ binit(void)
   initlock(&bcache.lock, "bcache");
 
   // Create linked list of buffers
+  // 将所有缓存块用双向链表组织起来，并为每个缓存块上睡眠锁
   bcache.head.prev = &bcache.head;
   bcache.head.next = &bcache.head;
   for(b = bcache.buf; b < bcache.buf+NBUF; b++){
@@ -75,7 +76,7 @@ bget(uint dev, uint blockno)
   // Not cached.
   // Recycle the least recently used (LRU) unused buffer.
   for(b = bcache.head.prev; b != &bcache.head; b = b->prev){
-    if(b->refcnt == 0) {
+    if(b->refcnt == 0) {    // 引用为0，说明空闲
       b->dev = dev;
       b->blockno = blockno;
       b->valid = 0;
@@ -99,7 +100,7 @@ bread(uint dev, uint blockno)
     virtio_disk_rw(b, 0);
     b->valid = 1;
   }
-  return b;
+  return b;   // 返回一个带锁的buf（带锁缓冲区）。在brelse时释放
 }
 
 // Write b's contents to disk.  Must be locked.

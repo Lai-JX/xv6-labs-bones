@@ -244,12 +244,12 @@ create(char *path, short type, short major, short minor)
   struct inode *ip, *dp;
   char name[DIRSIZ];
 
-  if((dp = nameiparent(path, name)) == 0)
+  if((dp = nameiparent(path, name)) == 0) // 父目录为空则失败
     return 0;
 
   ilock(dp);
 
-  if((ip = dirlookup(dp, name, 0)) != 0){
+  if((ip = dirlookup(dp, name, 0)) != 0){ // 从dp中查找目录name，返回对应inode
     iunlockput(dp);
     ilock(ip);
     if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
@@ -275,7 +275,7 @@ create(char *path, short type, short major, short minor)
       panic("create dots");
   }
 
-  if(dirlink(dp, name, ip->inum) < 0)
+  if(dirlink(dp, name, ip->inum) < 0)   // 将目录项写入
     panic("create: dirlink");
 
   iunlockput(dp);
@@ -297,7 +297,7 @@ sys_open(void)
 
   begin_op();
 
-  if(omode & O_CREATE){
+  if(omode & O_CREATE){     // 文件不存在则创建
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
       end_op();
@@ -309,20 +309,43 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
-    if(ip->type == T_DIR && omode != O_RDONLY){
+    if(ip->type == T_DIR && omode != O_RDONLY){   // 文件夹必须只读
       iunlockput(ip);
       end_op();
       return -1;
     }
   }
 
-  if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
+  if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){ // 判断主设备号
     iunlockput(ip);
     end_op();
     return -1;
   }
+    // 是否为符号链接
+  if(!(omode & O_NOFOLLOW)){
+    int cnt = 0;
+    while (ip->type == T_SYMLINK)
+    {
+      // 获取符号链接的路径
+      if (readi(ip, 0, (uint64)path, 0, MAXPATH) != MAXPATH)
+      {
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+      iunlockput(ip);
+      // 获取新的inode，同时判断是否为死循环链接（判断是否链接超过10次）
+      if ((ip = namei(path)) == 0 || ++cnt > 10)
+      {
+        end_op();
+        return -1;
+      }
+      // 由于namei中没有对ip加锁，而readi要求传入的ip必须加锁，所以这里需要对ip加锁
+      ilock(ip);
+    }
+  }
 
-  if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
+  if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){    // 分配文件结构体和文件描述符
     if(f)
       fileclose(f);
     iunlockput(ip);
@@ -334,7 +357,7 @@ sys_open(void)
     f->type = FD_DEVICE;
     f->major = ip->major;
   } else {
-    f->type = FD_INODE;
+    f->type = FD_INODE;   // 文件类型只有inode、pipe和device三种
     f->off = 0;
   }
   f->ip = ip;
@@ -343,7 +366,7 @@ sys_open(void)
 
   if((omode & O_TRUNC) && ip->type == T_FILE){
     itrunc(ip);
-  }
+  }  
 
   iunlock(ip);
   end_op();
@@ -482,5 +505,33 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64
+sys_symlink(void)
+{
+  char target[MAXPATH], path[MAXPATH];
+  struct inode *ip;
+
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
+    return -1;
+
+  begin_op();
+
+  if ((ip = create(path, T_SYMLINK, 0, 0)) == 0)
+  { // ip已上锁
+    end_op();
+    return -1;
+  }
+
+  if(writei(ip, 0, (uint64)target, 0, MAXPATH) != MAXPATH){   // 写入target
+    end_op();
+    return -1;
+  }
+  iupdate(ip);        // 写回磁盘
+  iunlockput(ip);     // 解锁并put(引用减1)
+
+  end_op();           // 结束对文件系统的系统调用
   return 0;
 }
