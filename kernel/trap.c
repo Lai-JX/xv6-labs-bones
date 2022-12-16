@@ -73,7 +73,6 @@ usertrap(void)
     if (cause == 13 || cause == 15)
     {
       uint64 v_address = r_stval();
-      // printf("trap :%p\n", cause);
       if (mmaplazy(v_address, cause) == 0)
       // 判断是否分配成功
         goto success;

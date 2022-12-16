@@ -538,28 +538,22 @@ uint64 sys_munmap(void){
   struct proc *p = myproc();
   struct VMA *vma = 0;
   struct VMA *prev = 0;
-  // printf("munmap!\n");
-  // printf("addr:%p\n", addr);
-  // printf("len:%d\n", len);
-  // printf("st:%p\n", st);
-  // printf("ed:%p!\n",ed);
+
   // 寻址对应的vma
   for (vma = p->vmalist; vma; vma = vma->next)
   {
-    // printf("vma_vmstart:%p\n", vma->vmstart);
-    // printf("vma_vmend:%p!\n",vma->vmend);
     if (vma->valid && st >= vma->vmstart && ed <= vma->vmend)
       break;
     prev = vma;
   }
-  // printf("vma found!\n");
+
   if (!vma)
     return -1;
 
   // 写回（if need）
   if (vma->shared && (vma->perm | PTE_W))
     filewrite(vma->file, st, len);
-  // printf("write!\n");
+
   pte_t *pte;
   // 取消映射
   for (uint64 i = st; i < ed; i += PGSIZE)
