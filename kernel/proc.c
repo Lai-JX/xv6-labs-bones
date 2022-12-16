@@ -134,6 +134,9 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // 非空闲空间的最高地址
+  p->curmax = MAXVA - 2 * PGSIZE;
+  p->vmalist = NULL;
   return p;
 }
 
@@ -295,7 +298,27 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
-
+  // 为子进程同步父进程所有vma的所有区域的映射, 类似mmap，同时注意文件引用计数
+  struct VMA *vma = 0, *np_vma = 0;
+  struct file *file;
+  for (vma = p->vmalist; vma; vma = vma->next)
+  {
+    np_vma = vmaalloc();
+    file = vma->file;
+    // file引用计数加1
+    filedup(file);
+    // 复制vma
+    np_vma->file = file;
+    np_vma->shared = vma->shared;
+    np_vma->perm = vma->perm;
+    np_vma->vmstart = vma->vmstart;
+    np_vma->vmend = vma->vmend;
+    np->curmax = p->curmax;
+    // 插入vma链表
+    np_vma->next = np->vmalist;
+    np->vmalist = np_vma;
+  }
+  
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
@@ -353,6 +376,28 @@ exit(int status)
     }
   }
 
+  // 取消一个进程所有vma的所有区域的映射, 类似munmap
+  struct VMA *vma = 0, *next = 0;
+  pte_t *pte;
+  for (vma = p->vmalist; vma; vma = next)
+  {
+    next = vma->next;
+    for (uint64 i = vma->vmstart; i < vma->vmend; i += PGSIZE)
+    {
+      // 检查一下是否已映射，因为之前采用的是惰性分配
+      pte = walk(p->pagetable, i, 0);
+      if (*pte & PTE_V)
+      {
+        uvmunmap(p->pagetable, i, 1, 0); // 第一个1表示解除1页，0表示不释放物理空间
+      }
+    }
+    // 更新vma
+    vma->next = 0;
+    fileclose(vma->file);
+    deallocvma(vma);
+  }
+  p->vmalist = NULL;
+
   begin_op();
   iput(p->cwd);
   end_op();
@@ -393,6 +438,8 @@ exit(int status)
   p->state = ZOMBIE;
 
   release(&original_parent->lock);
+
+  
 
   // Jump into the scheduler, never to return.
   sched();

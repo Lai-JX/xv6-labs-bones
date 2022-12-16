@@ -484,3 +484,113 @@ sys_pipe(void)
   }
   return 0;
 }
+uint64 sys_mmap(void){
+  uint64 addr;
+  int len, prot, flags, fd, offset;
+  // 获取各个参数
+  if( argaddr(0, &addr) < 0   ||
+      argint(1, &len) < 0     ||
+      argint(2, &prot) < 0    ||
+      argint(3, &flags) < 0   ||
+      argint(4, &fd) < 0      ||
+      argint(5, &offset) < 0)
+    return 0xffffffffffffffff;
+  struct proc *p = myproc();
+  struct VMA *vma = vmaalloc();
+
+  // 获取文件
+  struct file *file = p->ofile[fd];
+  // 判断权限
+  if ((prot & PROT_READ) && !file->readable)  // 要求可读，而文件不可读，失败
+    return 0xffffffffffffffff;
+  if ((prot & PROT_WRITE) && (flags & MAP_SHARED) && !file->writable)  // 要求可写，而文件不可写，失败
+    return 0xffffffffffffffff;
+
+  // 文件引用次数加1
+  filedup(file);
+
+  vma->file = file;
+  vma->shared = flags & MAP_SHARED;
+  vma->perm = ((prot & PROT_READ) ? PTE_R : 0) |
+              ((prot & PROT_WRITE) ? PTE_W : 0);
+  vma->vmstart = PGROUNDDOWN(p->curmax-len);  // 本实验默认addr为0，由内核自己决定空间的起始地址
+  vma->vmend = p->curmax;
+
+  // curmax 记录的是空闲区域的最高地址
+  p->curmax = vma->vmstart;
+
+  // 将vma插入进程控制块的vma链表(头插法)
+  vma->next = p->vmalist;
+  p->vmalist = vma;
+  return vma->vmstart;
+}
+uint64 sys_munmap(void){
+  uint64 addr;
+  int len;
+  // 获取各个参数 addr是调用mmap()时返回的地址，len是映射区的大小
+  if( argaddr(0, &addr) < 0   ||
+      argint(1, &len) < 0)
+    return -1;
+
+  uint64 st = PGROUNDDOWN(addr);
+  uint64 ed = PGROUNDDOWN(addr + len);    
+
+  struct proc *p = myproc();
+  struct VMA *vma = 0;
+  struct VMA *prev = 0;
+  // printf("munmap!\n");
+  // printf("addr:%p\n", addr);
+  // printf("len:%d\n", len);
+  // printf("st:%p\n", st);
+  // printf("ed:%p!\n",ed);
+  // 寻址对应的vma
+  for (vma = p->vmalist; vma; vma = vma->next)
+  {
+    // printf("vma_vmstart:%p\n", vma->vmstart);
+    // printf("vma_vmend:%p!\n",vma->vmend);
+    if (vma->valid && st >= vma->vmstart && ed <= vma->vmend)
+      break;
+    prev = vma;
+  }
+  // printf("vma found!\n");
+  if (!vma)
+    return -1;
+
+  // 写回（if need）
+  if (vma->shared && (vma->perm | PTE_W))
+    filewrite(vma->file, st, len);
+  // printf("write!\n");
+  pte_t *pte;
+  // 取消映射
+  for (uint64 i = st; i < ed; i += PGSIZE)
+  {
+    // 检查一下是否已映射，因为之前采用的是惰性分配
+    pte = walk(p->pagetable, i, 0);
+    if (*pte & PTE_V)
+    {
+      uvmunmap(p->pagetable, i, 1, 0); // 第一个1表示解除1页，0表示不释放物理空间
+    }
+  }
+
+  // 更新vma
+  // 在开始区域取消映射
+  if (st == vma->vmstart && ed < vma->vmend)
+    vma->vmstart = PGROUNDDOWN(vma->vmstart + len);
+  // 在结束区域取消映射
+  else if (vma->vmstart < st && ed == vma->vmend)
+    vma->vmend = st;
+  // 在全部区域取消映射
+  else if (vma->vmstart == st && ed == vma->vmend){
+    // 减少文件引用
+    fileclose(vma->file);
+    // 将vma从进程的vmalist删除
+    if (prev == 0)
+      p->vmalist = vma->next;
+    else
+      prev->next = vma->next;
+    // 回收vma
+    deallocvma(vma);
+  }
+
+  return 0;
+}

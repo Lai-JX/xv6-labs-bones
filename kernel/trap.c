@@ -68,11 +68,21 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
+    // deal with page fault with vma
+    uint64 cause = r_scause();
+    if (cause == 13 || cause == 15)
+    {
+      uint64 v_address = r_stval();
+      // printf("trap :%p\n", cause);
+      if (mmaplazy(v_address, cause) == 0)
+      // 判断是否分配成功
+        goto success;
+    }
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
-
+success:
   if(p->killed)
     exit(-1);
 

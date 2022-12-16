@@ -19,6 +19,11 @@ struct {
   struct file file[NFILE];
 } ftable;
 
+struct {
+  struct spinlock lock;
+  struct VMA vmas[NVMA];
+} vmatable;
+
 void
 fileinit(void)
 {
@@ -180,3 +185,85 @@ filewrite(struct file *f, uint64 addr, int n)
   return ret;
 }
 
+void
+vmainit(void)
+{
+  initlock(&vmatable.lock, "vmatable");
+}
+
+// Allocate a vma structure.
+struct VMA*
+vmaalloc(void)
+{
+  int i;
+  acquire(&vmatable.lock);
+  for (i = 0; i < NVMA; i++)
+  {
+    if (vmatable.vmas[i].valid == 1)
+      continue;
+    break;
+  }
+  if (i == NVMA)
+    panic("vmaalloc!\n");
+
+  vmatable.vmas[i].valid = 1;
+  release(&vmatable.lock);
+
+  return vmatable.vmas + i;
+}
+
+void
+deallocvma(struct VMA* vma)
+{
+  acquire(&vmatable.lock);
+  vma->valid = 0;
+  release(&vmatable.lock);
+}
+
+// 处理缺页错误，为映射文件空间分配物理页
+int mmaplazy(uint64 va, uint64 cause)
+{
+  struct proc *p = myproc();
+  struct VMA *vma = 0;
+  // printf("va:%p\n", va);
+  // 寻址对应的vma
+  for (vma = p->vmalist; vma; vma = vma->next)
+  {
+    // printf("vmstart:%p\n", vma->vmstart);
+    // printf("vmend:%p\n", vma->vmend);
+    if (vma->valid && va >= vma->vmstart && va < vma->vmend)
+      break;
+  }
+
+  if (!vma)
+    return -1;
+
+  // 读缺页
+  if (cause == 13 && !(vma->perm & PTE_R))
+    return -1;
+
+  // 写缺页
+  if (cause == 15 && !(vma->perm & PTE_W))
+    return -1;
+
+  // 分配一页物理内存
+  char *mem = kalloc();   
+  if(!mem)
+    return -1;
+
+  memset(mem, 0, PGSIZE);
+
+  // 建立映射
+  if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)mem, vma->perm|PTE_X|PTE_U) != 0){
+    kfree(mem);
+    uvmunmap(p->pagetable, PGROUNDDOWN(va), 1, 1); // 第一个1表示解除1页的映射，第2个1表示清除对应空间
+    return -1;
+  }
+
+  // 读取文件到物理内存 调用readi之前需要先上锁 (mem是内核地址，同时是物理地址；vma->vmstart是用户地址，同时是虚拟地址)
+  ilock(vma->file->ip);
+  readi(vma->file->ip, 0, (uint64)mem, PGROUNDDOWN(va)-(vma->vmstart), PGSIZE); // 倒数第二个参数应为要读取的数据所在块的起始地址在文件的偏移量
+  iunlock(vma->file->ip);
+ 
+  return 0;
+}

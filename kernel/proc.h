@@ -82,6 +82,17 @@ struct trapframe {
 
 enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+struct VMA
+{
+  int valid;            //VMA是否有效（非空闲）
+  uint64 vmstart;       // 映射的起始地址
+  uint64 vmend;         // 映射的末尾地址
+  int perm;             // 权限
+  struct file *file;    // 进行映射的文件
+  int shared;             // 共享内存的访问权限
+  struct VMA *next;     // 方便进程构建vma链表
+};
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -100,7 +111,9 @@ struct proc {
   pagetable_t pagetable;       // User page table
   struct trapframe *trapframe; // data page for trampoline.S
   struct context context;      // swtch() here to run process
-  struct file *ofile[NOFILE];  // Open files
+  struct file *ofile[NOFILE];  // Open files  // 下标为文件描述符
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  struct VMA *vmalist;         // 用于记录该进程中对mmap的各条记录
+  uint64 curmax;               // 非空闲空间的最高地址
 };
