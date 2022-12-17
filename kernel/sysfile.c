@@ -525,7 +525,7 @@ sys_symlink(void)
     return -1;
   }
 
-  if(writei(ip, 0, (uint64)target, 0, MAXPATH) != MAXPATH){   // 写入target
+  if(writei(ip, 0, (uint64)target, 0, MAXPATH) != MAXPATH){   // 将target写入
     end_op();
     return -1;
   }
