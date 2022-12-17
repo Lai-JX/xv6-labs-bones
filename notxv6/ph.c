@@ -7,7 +7,7 @@
 
 #define NBUCKET 5
 #define NKEYS 100000
-pthread_mutex_t lock[5];
+pthread_mutex_t lock[NBUCKET];
 
 struct entry
 {
