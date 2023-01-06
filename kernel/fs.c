@@ -401,12 +401,13 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
-  bn -= NINDIRECT;
+  /*lab fs 👇*/
+  bn -= NINDIRECT;        // bn减去直接索引和一级索引的项数
 
   if (bn < NDOUBLE_INDIRECT)    // 通过二级索引获得
   {
-    int idx = bn / NINDIRECT;
-    int off = bn % NINDIRECT;
+    int idx = bn / NINDIRECT;   // 索引块（次页表）块号
+    int off = bn % NINDIRECT;   // 在索引块中的项号（偏移量）
     // printf("double indirect\n");
     // Load double-indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT+1]) == 0)
@@ -430,7 +431,7 @@ bmap(struct inode *ip, uint bn)
       log_write(bp);
     }
     brelse(bp);
-    return addr;
+    return addr;    // 返回数据块块号
   }
 
   panic("bmap: out of range");

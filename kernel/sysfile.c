@@ -321,10 +321,11 @@ sys_open(void)
     end_op();
     return -1;
   }
-    // 是否为符号链接
+  /*lab fs👇*/
+  // 是否为符号链接
   if(!(omode & O_NOFOLLOW)){
     int cnt = 0;
-    while (ip->type == T_SYMLINK)
+    while (ip->type == T_SYMLINK) // 多层链接
     {
       // 获取符号链接的路径
       if (readi(ip, 0, (uint64)path, 0, MAXPATH) != MAXPATH)
@@ -514,18 +515,20 @@ sys_symlink(void)
   char target[MAXPATH], path[MAXPATH];
   struct inode *ip;
 
+  // 获取参数
   if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0)
     return -1;
 
-  begin_op();
+  begin_op(); // called at the start of each FS system call.(log)
 
-  if ((ip = create(path, T_SYMLINK, 0, 0)) == 0)
-  { // ip已上锁
+  // 调用create创建文件类型为T_SYMLINK的文件
+  if ((ip = create(path, T_SYMLINK, 0, 0)) == 0)  // 这里返回的ip已上锁
+  { 
     end_op();
     return -1;
   }
 
-  if(writei(ip, 0, (uint64)target, 0, MAXPATH) != MAXPATH){   // 将target写入
+  if(writei(ip, 0, (uint64)target, 0, MAXPATH) != MAXPATH){   // 将target写入，同时文件的引用计数已加 1
     end_op();
     return -1;
   }
