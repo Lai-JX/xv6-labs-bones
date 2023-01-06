@@ -104,14 +104,17 @@ walkaddr(pagetable_t pagetable, uint64 va)
     return 0;
 
   pte = walk(pagetable, va, 0);
+  /* lab lazy 👇 */
   // 映射未建立，有效位为0，则分配空间并建立映射（惰性分配）
   if(pte == 0 || (*pte & PTE_V) == 0){
-    // 既不能溢出，也不能访问用户栈的非法空间
+    // 虚拟地址有效性：既不能溢出，也不能访问用户栈的非法空间
     if(va < p->sz && va >= p->trapframe->sp){
+      // 分配物理页
       char *mem = kalloc();
       if (mem)
       {
         memset(mem, 0, PGSIZE);
+        // 建立映射
         if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
           kfree(mem);
           uvmunmap(p->pagetable, PGROUNDDOWN(va), 1, 1); // 第一个1表示解除1页的映射，第2个1表示清除对应空间
@@ -201,6 +204,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     panic("uvmunmap: not aligned");
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
+    /* lab lazy 👇 */
     if((pte = walk(pagetable, a, 0)) == 0)
       continue;   // panic("uvmunmap: walk"); lazy allocation
     if((*pte & PTE_V) == 0)
@@ -335,6 +339,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
+    /* lab lazy 👇 */
     if((pte = walk(old, i, 0)) == 0)
       continue; // panic("uvmcopy: pte should exist");  // 惰性分配
     if((*pte & PTE_V) == 0)
