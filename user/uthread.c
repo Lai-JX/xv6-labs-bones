@@ -79,6 +79,7 @@ thread_schedule(void)
     next_thread->state = RUNNING;
     t = current_thread;
     current_thread = next_thread;
+    /* lab thread 👇 */
     /* YOUR CODE HERE
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
@@ -97,9 +98,9 @@ thread_create(void (*func)())
     if (t->state == FREE) break;
   }
   t->state = RUNNABLE;
-  // YOUR CODE HERE
-  t->context.sp = (uint64)t->stack + STACK_SIZE - 1;
-  t->context.ra = (uint64)func;
+  /* lab thread 👇 */
+  t->context.sp = (uint64)t->stack + STACK_SIZE - 1;  // 栈指针
+  t->context.ra = (uint64)func;                       // 函数指针
 }
 
 void 

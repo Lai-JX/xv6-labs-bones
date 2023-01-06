@@ -7,6 +7,7 @@
 
 #define NBUCKET 5
 #define NKEYS 100000
+/* lab thread 👇 */
 pthread_mutex_t lock[NBUCKET];
 
 struct entry
@@ -44,6 +45,7 @@ void put(int key, int value)
 
   // is the key already present?
   struct entry *e = 0;
+  /* lab thread 👇 */
   pthread_mutex_lock(&lock[i]);
   for (e = table[i]; e != 0; e = e->next)
   {
@@ -57,6 +59,7 @@ void put(int key, int value)
     // the new is new.
     insert(key, value, &table[i], table[i]);
   }
+  /* lab thread 👇 */
   pthread_mutex_unlock(&lock[i]);
 }
 
@@ -67,10 +70,12 @@ get(int key)
 
 
   struct entry *e = 0;
+  /* lab thread 👇 */
   pthread_mutex_lock(&lock[i]);
   for (e = table[i]; e != 0; e = e->next) {
     if (e->key == key) break;
   }
+  /* lab thread 👇 */
   pthread_mutex_unlock(&lock[i]);
   return e;
 }
@@ -121,6 +126,7 @@ main(int argc, char *argv[])
     keys[i] = random();
   }
 
+  /* lab thread 👇 */
   // 初始化各个哈希桶的锁
   for (int i = 0; i < NBUCKET; i++)
   {

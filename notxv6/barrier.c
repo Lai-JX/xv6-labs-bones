@@ -30,6 +30,7 @@ barrier()
   // Block until all threads have called barrier() and
   // then increment bstate.round.
   //
+  /* lab thread 👇 */
   assert(pthread_mutex_lock(&bstate.barrier_mutex) == 0);
   if (++bstate.nthread == nthread) // 本轮所有线程均达到barrier
   {
