@@ -40,7 +40,9 @@ void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  /*lab cow 👇*/
   for (int i = 0; i < PAGES_REFCOUNT_LENTH; i++){
+    // 初始化锁
     initlock(&pages_refcount[i].lock, "ref_count");
     // 初始化时pages_refcount应置为0，但kfree这里会减一，所以我们提前置1
     pages_refcount[i].cnt = 1;
@@ -77,7 +79,7 @@ kfree(void *pa)
     if (cnt < 0)
       panic("kfree:pages_refcount");
 
-    if (cnt)
+    if (cnt)  // cnt不为0，说明还有进程引用该物理页，不能释放，直接返回
     {
       return;
     }

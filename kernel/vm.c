@@ -335,6 +335,8 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
 
     pa = PTE2PA(*pte);
+
+    /*lab cow 👇*/
     // 将父进程页表项的写标志位置0,cow标志位置一
     *pte = (*pte & ~(PTE_W)) | PTE_COW;
 
@@ -383,6 +385,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
+    /*lab cow 👇*/
     // copy on write
     if (cow(pagetable, va0, &pa0) == -1)  // 出错，即页表项为0
       return -1;
@@ -491,7 +494,7 @@ int cow(pagetable_t pagetable, uint64 va, uint64 *newpa)
       // 复制
       memmove(mem, (char *)pa, PGSIZE);
 
-      // 修改pte
+      // 修改子进程的pte
       *pte = ((*pte & ~(PTE_COW)) | PTE_W);
       uint flags = PTE_FLAGS(*pte);
       *pte = PA2PTE(mem) | flags;
