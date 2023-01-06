@@ -80,13 +80,13 @@ usertrap(void)
   if(which_dev == 2){
     if (p->ticks == 0)  // 如果没有设置ticks则和原来一样
       yield();
-    p->cur_ticks++;
-    if (p->cur_ticks == p->ticks && p->save_trapframe == 0)
+    p->cur_ticks++;     // 距离上次alarm的时钟周期数加1
+    if (p->cur_ticks == p->ticks && p->save_trapframe == 0) // 如果时钟周期数满，且save_trapframe为空（还未跳转），则需要进行跳转
     {
-      p->cur_ticks = 0;
-      p->save_trapframe = (struct trapframe *)kalloc();
+      p->cur_ticks = 0;                                 // 重置为0
+      p->save_trapframe = (struct trapframe *)kalloc(); // 保存寄存器
       memmove(p->save_trapframe, p->trapframe, PGSIZE);
-      p->trapframe->epc = p->handler;
+      p->trapframe->epc = p->handler;                   // 跳转到处理函数 （p->trapframe->epc保存用户程序计数器，即地址）
     }
   }
     

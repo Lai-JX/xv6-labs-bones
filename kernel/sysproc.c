@@ -99,6 +99,7 @@ sys_uptime(void)
   return xticks;
 }
 
+/* lab traps 👇 */
 uint64
 sys_sigalarm(void)
 {
@@ -112,9 +113,9 @@ sys_sigalarm(void)
   if (argaddr(1,&handler) < 0)
     return -1;
   acquire(&p->lock);
-  p->ticks = ticks;
-  p->handler = handler;
-  p->cur_ticks = 0;
+  p->ticks = ticks;       // 两次alarm间隔的时钟周期数
+  p->handler = handler;   // handler处理函数的地址
+  p->cur_ticks = 0;       // 初始化为0
   release(&p->lock);
   return 0;
 }
@@ -126,6 +127,7 @@ sys_sigreturn(void)
   acquire(&p->lock);
   if (p->save_trapframe)
   {
+    // 恢复之前保存的寄存器
     memmove(p->trapframe, p->save_trapframe, PGSIZE);
     kfree(p->save_trapframe);
     p->save_trapframe = 0;

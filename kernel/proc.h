@@ -103,7 +103,7 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-
+  /* lab traps 👇 */
   int ticks;                  // ticks between two alarms
   uint64 handler;             // alarm handler function
   int cur_ticks;              // ticks after last alarm

@@ -319,6 +319,7 @@ sfence_vma()
   asm volatile("sfence.vma zero, zero");
 }
 
+/* lab traps 👇 */
 /*read current frame pointer*/
 static inline uint64
 r_fp()
