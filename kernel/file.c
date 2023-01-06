@@ -184,7 +184,7 @@ filewrite(struct file *f, uint64 addr, int n)
 
   return ret;
 }
-
+/*lab mmap 👇*/
 void
 vmainit(void)
 {
@@ -197,23 +197,25 @@ vmaalloc(void)
 {
   int i;
   acquire(&vmatable.lock);
+  // 寻找空闲vma
   for (i = 0; i < NVMA; i++)
   {
     if (vmatable.vmas[i].valid == 1)
       continue;
     break;
   }
-  if (i == NVMA)
+  if (i == NVMA)    // 无空闲vma
     panic("vmaalloc!\n");
 
-  vmatable.vmas[i].valid = 1;
+  vmatable.vmas[i].valid = 1;   // 标记为非空闲
   release(&vmatable.lock);
 
-  return vmatable.vmas + i;
+  return vmatable.vmas + i;     // 返回vma结构体
 }
 
+// 回收vma
 void
-deallocvma(struct VMA* vma)
+deallocvma(struct VMA* vma)     
 {
   acquire(&vmatable.lock);
   vma->valid = 0;
@@ -226,7 +228,7 @@ int mmaplazy(uint64 va, uint64 cause)
   struct proc *p = myproc();
   struct VMA *vma = 0;
   // printf("va:%p\n", va);
-  // 寻址对应的vma
+  // 在当前进程的vmalist中寻找缺失地址对应的vma
   for (vma = p->vmalist; vma; vma = vma->next)
   {
     // printf("vmstart:%p\n", vma->vmstart);
@@ -238,12 +240,12 @@ int mmaplazy(uint64 va, uint64 cause)
   if (!vma)
     return -1;
 
-  // 读缺页
-  if (cause == 13 && !(vma->perm & PTE_R))
+  // 读缺页 
+  if (cause == 13 && !(vma->perm & PTE_R))  // 读缺页却禁止读
     return -1;
 
   // 写缺页
-  if (cause == 15 && !(vma->perm & PTE_W))
+  if (cause == 15 && !(vma->perm & PTE_W))  // 写缺页却禁止写
     return -1;
 
   // 分配一页物理内存
@@ -262,6 +264,7 @@ int mmaplazy(uint64 va, uint64 cause)
 
   // 读取文件到物理内存 调用readi之前需要先上锁 (mem是内核地址，同时是物理地址；vma->vmstart是用户地址，同时是虚拟地址)
   ilock(vma->file->ip);
+  // 读取文件内容到分配的物理页
   readi(vma->file->ip, 0, (uint64)mem, PGROUNDDOWN(va)-(vma->vmstart), PGSIZE); // 倒数第二个参数应为要读取的数据所在块的起始地址在文件的偏移量
   iunlock(vma->file->ip);
  

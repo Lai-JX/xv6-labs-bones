@@ -539,7 +539,7 @@ uint64 sys_munmap(void){
   struct VMA *vma = 0;
   struct VMA *prev = 0;
 
-  // 寻址对应的vma
+  // 在当前进程的vmalist中寻找缺失地址对应的vma
   for (vma = p->vmalist; vma; vma = vma->next)
   {
     if (vma->valid && st >= vma->vmstart && ed <= vma->vmend)
@@ -567,13 +567,13 @@ uint64 sys_munmap(void){
   }
 
   // 更新vma
-  // 在开始区域取消映射
+  // 如果是在开始区域取消映射
   if (st == vma->vmstart && ed < vma->vmend)
     vma->vmstart = PGROUNDDOWN(vma->vmstart + len);
-  // 在结束区域取消映射
+  // 如果是在结束区域取消映射
   else if (vma->vmstart < st && ed == vma->vmend)
     vma->vmend = st;
-  // 在全部区域取消映射
+  // 如果是在全部区域取消映射
   else if (vma->vmstart == st && ed == vma->vmend){
     // 减少文件引用
     fileclose(vma->file);

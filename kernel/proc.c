@@ -298,6 +298,7 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+  /* lab mmap 👇*/
   // 为子进程同步父进程所有vma的所有区域的映射, 类似mmap，同时注意文件引用计数
   struct VMA *vma = 0, *np_vma = 0;
   struct file *file;
@@ -375,7 +376,7 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
-
+  /* lab mmap 👇*/
   // 取消一个进程所有vma的所有区域的映射, 类似munmap
   struct VMA *vma = 0, *next = 0;
   pte_t *pte;
@@ -393,7 +394,7 @@ exit(int status)
     }
     // 更新vma
     vma->next = 0;
-    fileclose(vma->file);
+    fileclose(vma->file); // 文件引用计数减一
     deallocvma(vma);
   }
   p->vmalist = NULL;
