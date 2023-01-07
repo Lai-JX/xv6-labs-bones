@@ -89,7 +89,7 @@ struct VMA
   uint64 vmend;         // 映射的末尾地址
   int perm;             // 权限(读写等)
   struct file *file;    // 进行映射的文件
-  int shared;             // 共享内存的访问权限
+  int shared;             // 共享权限
   struct VMA *next;     // 方便进程构建vma链表
 };
 
